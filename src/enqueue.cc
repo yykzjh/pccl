@@ -597,6 +597,7 @@ namespace {
 
 ncclResult_t ncclLaunchFinish(ncclComm_t comm) {
   ncclResult_t result = ncclSuccess;
+  ncclResult_t stepResult = ncclSuccess;
   struct ncclKernelPlanner* planner = &(comm->planner);
   planner->collBytesTotal = 0; // Just in case subtraction during scheduleCollTasksToPlan() doesn't get to 0
 
@@ -634,21 +635,24 @@ ncclResult_t ncclLaunchFinish(ncclComm_t comm) {
   // Create dependency for deviceStream on launchStream. We know that deviceStream
   // hasn't been modified since launchStream waited on it (in ncclLaunchPrepare),
   // so we can say that launchStream subsumes it.
-  NCCLCHECKGOTO(ncclStrongStreamWaitStream(planner->capturingGraph, &comm->sharedRes->deviceStream, launchStream, /*b_subsumes_a=*/true), result, resume1);
+  NCCLCHECKGOTO(ncclStrongStreamWaitStream(planner->capturingGraph, &comm->sharedRes->deviceStream, launchStream, /*b_subsumes_a=*/true), stepResult, resume1);
   resume1:
+    if (result == ncclSuccess) result = stepResult;
     // Create dependency for other user streams (skip launch stream) on deviceStream.
     // Again, the user streams haven't been touched since deviceStream waited on them
     // so we can say they are subsumed by deviceStream.
     struct ncclCudaStreamList* sl = planner->streams->next;
     while (sl != nullptr) {
-      NCCLCHECKGOTO(ncclStrongStreamWaitStream(planner->capturingGraph, sl->stream, &comm->sharedRes->deviceStream, /*b_subsumes_a=*/true), result, resume2);
+      NCCLCHECKGOTO(ncclStrongStreamWaitStream(planner->capturingGraph, sl->stream, &comm->sharedRes->deviceStream, /*b_subsumes_a=*/true), stepResult, resume2);
     resume2:
+      if (result == ncclSuccess) result = stepResult;
       sl = sl->next;
     }
     // Release device stream as acquired in ncclLaunchPrepare()
 
-    NCCLCHECKGOTO(ncclStrongStreamRelease(planner->capturingGraph, &comm->sharedRes->deviceStream), result, resume3);
-  resume3:;
+    NCCLCHECKGOTO(ncclStrongStreamRelease(planner->capturingGraph, &comm->sharedRes->deviceStream), stepResult, resume3);
+  resume3:
+    if (result == ncclSuccess) result = stepResult;
   return result;
 }
 
