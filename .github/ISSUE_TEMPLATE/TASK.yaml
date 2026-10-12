@@ -1,0 +1,34 @@
+name: PCCL task
+description: Plan a concrete development, testing, or documentation task
+title: "[Task]: "
+type: Task
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for a defined piece of work. Use a feature request for a proposed capability or an issue report for unexpected behavior.
+        Issues in this repository are public; do not include internal-only information.
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should this task accomplish, and why is it needed? Link related issues if available.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Outline the work and affected components. Note exclusions if useful.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Describe the observable result or validation needed to consider this task complete.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies (if any)
+      description: Link prerequisite work and note any required test environment or coordination.

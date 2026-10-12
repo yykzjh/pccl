@@ -27,10 +27,57 @@ jobs:
     if: github.event_name == 'pull_request'
     uses: t-head/.github/.github/workflows/user-precheck.yml@main
 
+  commit-format:
+    name: Commit Format and DCO
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check contribution commits
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import subprocess
+          import sys
+
+          def git(*args):
+              return subprocess.check_output(['git', *args], text=True)
+
+          commits = git('rev-list', '--no-merges',
+                        os.environ['BASE_SHA'] + '..' + os.environ['HEAD_SHA']).splitlines()
+          errors = []
+          for sha in commits:
+              message = git('show', '-s', '--format=%B', sha)
+              lines = message.splitlines()
+              if not lines or not lines[0].strip() or len(lines[0]) > 50:
+                  errors.append(f'{sha[:12]}: title must contain 1-50 characters')
+              if len(lines) < 2 or lines[1] != '':
+                  errors.append(f'{sha[:12]}: second line must be blank')
+              trailers = subprocess.check_output(
+                  ['git', 'interpret-trailers', '--parse'], input=message, text=True).splitlines()
+              if not any(re.fullmatch(r'Signed-off-by: .+ <[^<>\s]+@[^<>\s]+>', line)
+                         for line in trailers):
+                  errors.append(f'{sha[:12]}: missing valid Signed-off-by trailer')
+          for error in errors:
+              print(error)
+          print(f'Checked {len(commits)} non-merge contribution commits.')
+          sys.exit(bool(errors))
+          PY
+
   # Stage 2: AI code review runs in parallel with prepare.
   ai-code-review:
     name: AI Code Review (Copilot Gate)
-    needs: precheck
+    needs: [precheck, commit-format]
     if: github.event_name == 'pull_request'
     uses: t-head/.github/.github/workflows/ai-code-review.yml@main
     secrets: inherit
@@ -46,8 +93,8 @@ jobs:
   # Read the test list so each test runs in its own isolated PPU pod.
   prepare:
     name: Prepare Test Matrix
-    needs: precheck
-    if: always() && (needs.precheck.result == 'success' || needs.precheck.result == 'skipped')
+    needs: [precheck, commit-format]
+    if: always() && (needs.precheck.result == 'success' || needs.precheck.result == 'skipped') && (needs.commit-format.result == 'success' || needs.commit-format.result == 'skipped')
     runs-on: k8s-runner-group-cpu-thead
     container:
       image: ghcr.io/actions/actions-runner:latest
@@ -214,8 +261,8 @@ jobs:
   # Build and test pccl with notsm configuration in a single isolated PPU pod.
   build-test-notsm:
     name: Build & Test (ubuntu24_notsm, ZW-890P)
-    needs: [precheck, human-review]
-    if: always() && (needs.precheck.result == 'success' || needs.precheck.result == 'skipped') && (needs.human-review.result == 'success' || needs.human-review.result == 'skipped')
+    needs: [precheck, commit-format, human-review]
+    if: always() && (needs.precheck.result == 'success' || needs.precheck.result == 'skipped') && (needs.commit-format.result == 'success' || needs.commit-format.result == 'skipped') && (needs.human-review.result == 'success' || needs.human-review.result == 'skipped')
     runs-on: k8s-runner-group-cpu-thead
     container:
       image: ghcr.io/actions/actions-runner:latest

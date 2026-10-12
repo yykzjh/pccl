@@ -79,6 +79,8 @@ rules:
 
   - category: "错误处理与 Abort 传播"
     items:
+      - "公开 PCCL API 的操作状态使用 pcclResult_t；内部可使用其别名 ncclResult_t，不将此要求套用于返回数据、指针或 void 的函数。"
+      - "错误检查须匹配被调用接口的返回约定，分别使用 NCCLCHECK、HGGCCHECK、SYSCHECK、PTHREADCHECK 或适当的错误处理路径。"
       - "不得忽略关键返回值、异步错误状态或后台线程错误。"
       - "新增的系统调用、驱动调用、运行时调用必须使用现有检查宏或统一错误处理封装，不得裸调用后忽略返回值。"
       - "所有错误路径必须返回统一错误码体系，不得混用异常、断言终止和隐式失败。"
@@ -162,7 +164,11 @@ rules:
 
   - category: "命名规范"
     items:
-      - "公共 API、内部函数、静态辅助函数、结构体、枚举、宏、模板参数的命名必须与现有代码库风格保持一致，不得混用不同命名体系。"
+      - "新增或修改的函数、变量和类型名称使用 lowerCamelCase，并遵循所在模块的既有约定，如类型名的 _t 后缀；保留上游或兼容性要求的既有名称，不要求无关的历史符号统一重命名。"
+      - "宏和常量使用 UPPER_CASE_WITH_UNDERSCORES；已有接口及兼容别名遵循其既有命名约定。"
+      - "从 NCCL 移植的内部接口保留 nccl 前缀，包括来自旧版 NCCL 或已适配 HGGC 的实现；PCCL 新设计的接口使用 pccl 前缀，对外 PCCL API 及其公开类型使用 pccl 命名。"
+      - "保留现有内部兼容别名，如 pcclResult_t 的别名 ncclResult_t。重命名内部符号前须核对对应 NCCL 版本或源码历史，不得仅凭硬件适配或首次引入该符号的 PCCL 提交判断其为 PCCL 原创。"
+      - "命名变更须保持声明、定义、调用点、插件契约和示例一致，并检查导出符号及 ABI 兼容性；其余函数、变量、类型和宏遵循所在模块的现有风格。"
       - "变量名必须语义清晰，区分字节数、元素数、索引、偏移、rank、channel、step、chunk、slot、credit 等不同概念。"
       - "布尔变量命名应体现状态语义，如 `isReady`、`hasError`、`needAbort`。"
       - "循环索引和线程局部短变量可使用简短命名，但非局部语义变量不得使用无意义缩写。"
@@ -220,9 +226,17 @@ rules:
       - "共享状态惰性初始化未使用安全发布或同步机制。"
       - "新增设备相关内存操作、异步操作或平台特有操作时，遗漏既有的上下文切换、模式切换或平台保护流程。"
 
+  - category: "目标分支更新提示"
+    items:
+      - "根据 PR 或已确认的目标确定目标仓库和分支，获取最新状态后检查贡献分支是否包含目标分支最新提交；不得默认以 origin 或 main 为目标。"
+      - "若分支落后，提示落后情况并建议更新或 rebase，作为非阻断提醒，不仅因此拒绝提交或推送；合并前须解决冲突及相关集成问题。"
+      - "目标不明确或无法获取最新状态时，说明未能验证；不把包含最新目标提交等同于做过 rebase，也不自动改写历史。"
+
   - category: "Commit Message 规范"
     items:
-      - "检查 commit 和 PR 标题是否遵循 <type>(<scope>): <subject> 格式，scope 可选；type 为 feat、fix、refactor、docs、test、chore 或 perf。"
-      - "如引用 GitHub issue，检查格式是否为 Refs: #<issue_number> 、Closes #<issue_number> 或 Fixes #<issue_number>。"
-      - "每一项已填写的内容不能为空。"
-      - "每个字段应保持固定前缀格式，包含正确的大小写、冒号和空格。"
+      - "按 CONTRIBUTING.md 检查每笔贡献提交的 Signed-off-by；amend 或 squash 时保留已有 Signed-off-by 和 Co-authored-by，不得编造签署身份或认证。"
+      - "不兼容变更须说明兼容性影响和迁移方式。"
+      - "按 CONTRIBUTING.md 检查 commit 标题：英文祈使句、简短概括，完整标题（含前缀）不超过 50 个字符。推荐 feat:、fix:、docs: 等 type 前缀，但不强制；有前缀时，其后的描述使用祈使句。不得仅因缺少 type 前缀 拒绝提交。"
+      - "有关联 GitHub issue 时引用，格式为 Refs: #<issue_number>、Closes #<issue_number> 或 Fixes #<issue_number>；跨仓库引用使用 owner/repo#<issue_number>。引用须真实且相关，不得编造；无关联 issue 时不阻止提交或推送。关闭关键词仅用于实际解决且希望自动关闭的 issue。"
+      - "第二行必须为空行，将标题与正文分隔；正文应说明问题、解决方案和相关限制。"
+      - "标题和 footer 按 CONTRIBUTING.md 检查格式，不要求正文使用固定字段前缀。"

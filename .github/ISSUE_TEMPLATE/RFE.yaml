@@ -1,0 +1,28 @@
+name: PCCL feature request
+description: Propose a new capability or improvement
+title: "[RFE]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check [existing requests](https://github.com/t-head/pccl/issues?q=is%3Aissue%20label%3Aenhancement) and link related discussions where useful.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and use case
+      description: What limitation are you encountering, and who would benefit from addressing it?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe the capability or improvement you need. Include platform constraints or measurable expectations if relevant; a detailed implementation proposal is not required.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Current workaround or alternatives
+      description: How do you handle this today, and what limitations remain?

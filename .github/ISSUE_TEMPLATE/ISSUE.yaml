@@ -1,0 +1,69 @@
+name: PCCL issue or bug
+description: Report unexpected behavior, errors, or performance problems
+title: "[Issue]: "
+labels: ["triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the unexpected behavior and provide steps to reproduce it.
+        Check [existing issues](https://github.com/t-head/pccl/issues) for related reports and link them if useful.
+        See the [PCCL documentation](https://developer.t-head.cn/docs_center/doc_detail/index.html?projectId=35) for usage information.
+  - type: dropdown
+    id: symptom
+    attributes:
+      label: Observed behavior
+      options:
+        - Lower performance than expected
+        - Application crash or runtime error
+        - Incorrect results or data corruption
+        - Application hang or timeout
+        - Build or installation failure
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Describe what you expected and what happened. Include the first error or warning, if any.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Include the command or a minimal example, relevant environment variables, how often this occurs, and whether an earlier version worked. If you cannot share a reproducer, describe what you have observed.
+  - type: input
+    id: pccl_version
+    attributes:
+      label: PCCL version or commit
+      description: |
+        Check the debug logs, or inspect the library used by your application with `strings /path/to/libpccl.so | grep -E '^PCCL version [0-9]'`, replacing the path with the actual library path. For source builds, provide the commit ID if known.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: SDK and execution environment
+      description: |
+        Include the SAIL SDK version, OS, and whether you run on bare metal or in a container. For containers, include the image version if known.
+        If `PPU_SDK` is already set (as in SDK containers), use `cat "$PPU_SDK/release.yaml"`. Otherwise, source your SDK's `envsetup.sh` first. If the file is unavailable, provide the SDK package or container image version.
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware and scale
+      description: Include the PPU model, number of nodes, PPUs per node, and ranks. For cross-node issues, include network adapter details and topology if known.
+  - type: textarea
+    id: performance
+    attributes:
+      label: Performance comparison (if applicable)
+      description: For performance issues, include the benchmark command, collective operation, message sizes, single-node or cross-node setup, expected and measured latency or bandwidth with units, and the comparison version or configuration.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and topology (if available)
+      description: |
+        Set `NCCL_DEBUG=INFO` and `NCCL_DEBUG_FILE=ncclDebug.%h.%p` before running to collect one log per process (`%h` is the hostname and `%p` the process ID).
+        For topology-related issues, also set `NCCL_TOPO_DUMP_FILE=ncclSystem.txt`; PCCL may add a rank suffix, such as `ncclSystem_rank0000.xml`. Topology files are not required for every report.
+        For build failures, provide the build command and error output instead.
