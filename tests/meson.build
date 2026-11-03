@@ -55,3 +55,10 @@ executable('graphSearchTest',
 
 # Install the executable
 install_dir = join_paths(get_option('prefix'), 'bin')
+
+# Standalone CPU protocol checks for the SNIC device queue implementation.
+snic_queue_test = executable('snicGdakiQueueTest',
+  './src/snic_gdaki_queue_test.cc',
+  include_directories: include_directories('../src/include'),
+  cpp_args: ['-std=c++17'])
+test('snic-gdaki-queue', snic_queue_test, timeout: 30)

@@ -154,6 +154,10 @@ static ncclResult_t gdakiRegMrDmaBuf(struct ibv_mr** mr, struct ibv_pd* pd,
 // least PAGE_SIZE bytes via gdakiAlignedHggcMalloc.
 static ncclResult_t gdakiRegMr(struct ibv_mr **mr, struct ibv_pd *pd, void *addr, size_t length,
                                int access, bool force_strict_ordering = false) {
+  if (strncmp(wrap_ibv_get_device_name(pd->context->device), "troce", 5) == 0) {
+    // Native SNIC GDAKI uses the verified peer-memory path, iova=0 and strict ordering.
+    return wrap_ibv_reg_mr_iova2(mr, pd, addr, length, 0, (unsigned int)access);
+  }
   if (!force_strict_ordering && gdakiRelaxedOrderingEnabled())
     access |= IBV_ACCESS_RELAXED_ORDERING;
 
@@ -523,11 +527,15 @@ destroy_verbs_qp_attr:
 
 NCCL_PARAM(GinGdakiUseReliableDB, "GDAKI_USE_RELIABLE_DB", 0);
 
+#include "gin_host_snic.h"
+
 ncclResult_t ncclGinGdakiCreateContext(void *collComm, int nSignals, int nCounters, int nContexts, int queueDepth,
                                        int trafficClass, void **outGinCtx, ncclNetDeviceHandle_t **outDevHandle) {
   ncclResult_t status = ncclSuccess;
 
   struct ncclGinIbCollComm *cComm = (struct ncclGinIbCollComm *)collComm;
+  if (snicDevice(cComm->ib.context))
+    return snicCreateContext(cComm, nSignals, nCounters, nContexts, queueDepth, trafficClass, outGinCtx, outDevHandle);
 
   char pciBusId[MAX_PCI_ADDRESS_LEN];
 
@@ -922,6 +930,7 @@ out:
 }
 
 ncclResult_t ncclGinGdakiDestroyContext(void *ginCtx) {
+  if (snicContext(ginCtx)) { delete static_cast<SnicHostContext*>(ginCtx); return ncclSuccess; }
   if (!ginCtx) return ncclInvalidArgument;
 
   ncclResult_t status = ncclSuccess;
@@ -1109,6 +1118,7 @@ ncclResult_t ncclGinGdakiDeregMrSym(void *collComm, void *mhandle) {
 }
 
 ncclResult_t ncclGinGdakiProgress(void *ctx) {
+  if (snicContext(ctx)) return ncclSuccess; // GPU/NIC data plane has no CPU progress work.
   struct gdaki_context *gdakiCtx = (struct gdaki_context *)ctx;
   const int ncontexts = gdakiCtx->nContexts;
   const int nranks = gdakiCtx->collComm->nranks;
@@ -1138,6 +1148,10 @@ ncclResult_t ncclGinGdakiProgress(void *ctx) {
 }
 
 ncclResult_t ncclGinGdakiQueryLastError(void *ginCtx, bool *hasError) {
+  if (snicContext(ginCtx)) {
+    *hasError = __atomic_load_n(static_cast<SnicHostContext*>(ginCtx)->hostError, __ATOMIC_ACQUIRE) != 0;
+    return ncclSuccess;
+  }
   struct gdaki_context *gdakiCtx = (struct gdaki_context *)ginCtx;
   bool hasError_ = false;
   const int ncontexts = gdakiCtx->nContexts;

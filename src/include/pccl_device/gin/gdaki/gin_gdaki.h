@@ -40,6 +40,8 @@ struct pcclGinGdakiRequest {
 static_assert(sizeof(pcclGinGdakiRequest) <= sizeof(pcclGinRequest_t),
               "pcclGinGdakiRequest must fit in pcclGinRequest_t");
 
+#include "gin_snic.h"
+
 #ifdef PCCL_DEVICE_GIN_GDAKI_ENABLE_DEBUG
 #include <stdio.h>
 #endif
@@ -65,6 +67,15 @@ PCCL_DEVICE_INLINE static void putImplMode(pcclGinCtx ctx, Coop coop, int peer, 
                                               hggc::thread_scope required, hggc::thread_scope given,
                                               uint32_t optFlags) {
   using pccl::utility::loadConst;
+  auto* snic = &static_cast<pcclGinGdakiGPUContext*>(ctx.handle)[ctx.contextId];
+  if (pccl::gin::snic::enabled(snic)) {
+    coop.sync();
+    if (coop.thread_rank() == 0)
+      pccl::gin::snic::put(ctx, snic, peer, hasWins, dstWin, dstOff, srcWin, srcOff, bytes,
+                          hasSignal, signalOffset, signalKey, signalOp, signalOpArg, hasCounter, counterId,
+                          optFlags & pcclGinOptFlagsAggregateRequests);
+    coop.sync(); return;
+  }
   coop.sync();
   if (coop.thread_rank() == 0) {
     pcclGinGdakiGPUContext* gdaki = &((struct pcclGinGdakiGPUContext*)ctx.handle)[ctx.contextId];
@@ -174,7 +185,15 @@ PCCL_DEVICE_INLINE static void putValueImplMode(pcclGinCtx ctx, Coop coop, int p
                                       hggc::thread_scope required, hggc::thread_scope given,
                                       uint32_t optFlags) {
   using pccl::utility::loadConst;
-
+  auto* snic = &static_cast<pcclGinGdakiGPUContext*>(ctx.handle)[ctx.contextId];
+  if (pccl::gin::snic::enabled(snic)) {
+    coop.sync();
+    if (coop.thread_rank() == 0)
+      pccl::gin::snic::putValue(snic, peer, dstWin, dstOff, srcData, hasSignal,
+                               signalOffset, signalKey, signalOp, signalOpArg,
+                               optFlags & pcclGinOptFlagsAggregateRequests);
+    coop.sync(); return;
+  }
   coop.sync();
   if (coop.thread_rank() == 0) {
     pcclGinGdakiGPUContext* gdaki = &((struct pcclGinGdakiGPUContext*)ctx.handle)[ctx.contextId];
@@ -251,6 +270,13 @@ struct pcclGinApi_Get<PCCL_NET_DEVICE_GIN_GDAKI> {
                                       bool hasDescriptor, pcclGinDescriptorSmem* descriptor,
                                       uint32_t optFlags = pcclGinOptFlagsDefault) {
     using pccl::utility::loadConst;
+    auto* snic = &static_cast<pcclGinGdakiGPUContext*>(ctx.handle)[ctx.contextId];
+    if (pccl::gin::snic::enabled(snic)) {
+      coop.sync();
+      if (coop.thread_rank() == 0)
+        pccl::gin::snic::get(snic, peer, remoteWin, remoteOff, localWin, localOff, bytes);
+      coop.sync(); return;
+    }
     coop.sync();
     if (coop.thread_rank() == 0) {
       pcclGinGdakiGPUContext* gdaki = &((struct pcclGinGdakiGPUContext*)ctx.handle)[ctx.contextId];
@@ -278,6 +304,10 @@ struct pcclGinApi_FlushAsync<PCCL_NET_DEVICE_GIN_GDAKI> {
     using pccl::utility::loadConst;
     pcclGinGdakiRequest* req = reinterpret_cast<pcclGinGdakiRequest*>(outRequest);
     req->peer = peer;
+    auto* snic = &static_cast<pcclGinGdakiGPUContext*>(ctx.handle)[ctx.contextId];
+    if (pccl::gin::snic::enabled(snic)) {
+      req->docaTicket = pccl::gin::snic::flushAsync(snic, peer); return;
+    }
     pcclGinGdakiGPUContext* gdaki = &((struct pcclGinGdakiGPUContext*)ctx.handle)[ctx.contextId];
     doca_gpu_dev_verbs_qp* qp = loadConst(&gdaki->gdqp) + peer;
     doca_gpu_dev_verbs_addr daddr;
@@ -298,6 +328,10 @@ struct pcclGinApi_Wait<PCCL_NET_DEVICE_GIN_GDAKI> {
     using pccl::utility::loadConst;
     using pccl::utility::testAbort;
     pcclGinGdakiRequest& req = reinterpret_cast<pcclGinGdakiRequest&>(request);
+    auto* snic = &static_cast<pcclGinGdakiGPUContext*>(ctx.handle)[ctx.contextId];
+    if (pccl::gin::snic::enabled(snic)) {
+      pccl::gin::snic::wait(snic, req.peer, req.docaTicket, abortFlag); return;
+    }
     pcclGinGdakiGPUContext* gdaki = &((struct pcclGinGdakiGPUContext*)ctx.handle)[ctx.contextId];
     doca_gpu_dev_verbs_qp* qp = loadConst(&gdaki->gdqp) + req.peer;
     if (abortFlag) {
@@ -427,6 +461,12 @@ struct pcclGinApi_Flush<PCCL_NET_DEVICE_GIN_GDAKI> {
     using pccl::utility::testAbort;
 
     pcclGinGdakiGPUContext* gdaki = &((struct pcclGinGdakiGPUContext*)ctx.handle)[ctx.contextId];
+    if (pccl::gin::snic::enabled(gdaki)) {
+      coop.sync();
+      for (int peer = coop.thread_rank(); peer < ctx.nRanks; peer += coop.size())
+        pccl::gin::snic::flush(gdaki, peer, abortFlag);
+      coop.sync(); return;
+    }
     doca_gpu_dev_verbs_qp* qps = loadConst(&gdaki->gdqp);
 
     if (abortFlag) {

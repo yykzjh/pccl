@@ -70,6 +70,8 @@ static ncclResult_t ncclGinIbGdrGpuSupport(bool gdaki) {
 }
 
 NCCL_PARAM(GinType, "GIN_TYPE", -1);
+// Opt-in is required because precompiled GDAKI kernels use the mlx5 subtype.
+NCCL_PARAM(GinSnicGdakiEnable, "GIN_SNIC_GDAKI_ENABLE", 0);
 
 static std::mutex ncclGinIbGdakiLockMutex;
 static int ncclGinIbGdakiNDevs = -1;
@@ -79,7 +81,8 @@ ncclResult_t ncclGinIbGdakiInit() {
   if (ncclGinIbGdakiNDevs == -1) {
     int ndevs = 0;
     for (int i = 0; i < ncclNIbDevs; i++) {
-      if (ncclIbDevs[i].ibProvider == IB_PROVIDER_MLX5) {
+      if (ncclIbDevs[i].ibProvider == IB_PROVIDER_MLX5 ||
+          (ncclIbDevs[i].ibProvider == IB_PROVIDER_TROCE && ncclParamGinSnicGdakiEnable())) {
         ncclGinIbGdakiDevIndexes[ndevs] = i;
         ++ndevs;
       }
@@ -110,7 +113,11 @@ ncclResult_t ncclGinIbInitType(void** ctx, uint64_t /*commId*/, ncclDebugLogger_
 
 try_gdaki:
   NCCLCHECK(ncclGinIbGdakiInit());
-  if (ncclGinIbGdakiNDevs == 0 && ginType == -1) goto try_proxy;
+  if (ncclGinIbGdakiNDevs == 0) {
+    if (ginType == -1) goto try_proxy;
+    WARN("GIN_IB_GDAKI has no compatible provider. SNIC requires matching native device headers and PCCL_GIN_SNIC_GDAKI_ENABLE=1; forced GDAKI will not fall back to Proxy.");
+    return ncclInvalidUsage;
+  }
   NCCLCHECK(ncclGinIbGdrSupport(&gdrSupport, /*gdaki*/ true));
   if (!gdrSupport && ginType == -1) goto try_proxy;
   if (!gdrSupport) return ncclInternalError;

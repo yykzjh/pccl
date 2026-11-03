@@ -241,7 +241,7 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
   static int shownIbHcaEnv = 0;
   static ncclResult_t initResult = ncclSuccess;
   if(wrap_ibv_symbols() != ncclSuccess) { return ncclInternalError; }
-  if (ncclParamIbOooRq() && wrap_mlx5dv_symbols() != ncclSuccess) {
+  if (wrap_mlx5dv_symbols() != ncclSuccess && ncclParamIbOooRq()) {
     // Non-fatal: OOO RQ is auto-disabled per-device because wrap_mlx5dv_is_supported()
     // returns false once the mlx5dv symbols failed to load (see ncclIbQueryOooRqSize).
     WARN("NET/IB : NCCL_IB_OOO_RQ is enabled but mlx5 Direct Verbs symbols are unavailable; continuing with OOO RQ disabled");
@@ -375,7 +375,9 @@ ncclResult_t ncclIbInit(ncclDebugLogger_t logFunction) {
             ncclIbDevs[ncclNIbDevs].ar = ncclParamIbAdaptiveRouting();
           }
           ncclIbDevs[ncclNIbDevs].oooRqSize = oooRqSize;
-          ncclIbDevs[ncclNIbDevs].ibProvider = IB_PROVIDER_MLX5;
+          ncclIbDevs[ncclNIbDevs].ibProvider = wrap_mlx5dv_is_supported(devices[d])
+              ? IB_PROVIDER_MLX5 : strncmp(wrap_ibv_get_device_name(devices[d]), "troce", 5) == 0
+                  ? IB_PROVIDER_TROCE : IB_PROVIDER_NONE;
           ncclIbDevs[ncclNIbDevs].pd = NULL;
           ncclIbDevs[ncclNIbDevs].dmaBufSupported = -1;
           NCCLCHECKGOTO(ncclIbStatsInit(&ncclIbDevs[ncclNIbDevs].stats), res, exit);
